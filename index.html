@@ -249,9 +249,9 @@ body { padding: 8px 10px 20px; max-width: 600px; margin: 0 auto; }
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// Same-origin fetch: status.json sits next to this HTML in the public repo,
-// served via GitHub Pages. No tunnel needed, no CORS issues, no auth needed.
-const STATUS_URL = 'status.json';
+// GitHub Pages CDN caches JSON for 10 min. We fetch from raw.githubusercontent.com instead,
+// which serves directly without CDN — real-time updates every 10s.
+const STATUS_URL = 'https://raw.githubusercontent.com/Haghi89/fp-dash/main/status.json';
 const REFRESH_MS = 10000;
 
 let activeTab = 'ftmo';
