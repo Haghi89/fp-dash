@@ -393,7 +393,9 @@ function renderChart(prefix, samples, key) {
   if (prefix === 'ftmo') ftmoChart = chart; else fpChart = chart;
 }
 
+let refreshCount = 0;
 async function refresh() {
+  refreshCount++;
   try {
     const r = await fetch(STATUS_URL + '?t=' + Date.now(), { cache: 'no-store' });
     if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -409,14 +411,22 @@ async function refresh() {
       renderChart('fp',   d.timeline, 'fp_target_pct');
     }
     renderAlert(d);
-    $('foot').textContent = 'updated ' + new Date(lastFetch).toLocaleTimeString();
+    const dataAge = Math.round((Date.now() - new Date(d.generated_utc).getTime()) / 1000);
+    $('foot').textContent = `refresh #${refreshCount} · data ${dataAge}s old · fetched ${new Date(lastFetch).toLocaleTimeString()}`;
+    $('foot').style.color = dataAge > 30 ? 'var(--orange)' : 'var(--muted)';
   } catch (e) {
-    const age = (Date.now() - lastFetch) / 1000;
+    const age = lastFetch ? (Date.now() - lastFetch) / 1000 : 0;
     $('dot').className = age > 120 ? 'dot dead' : 'dot stale';
-    $('foot').textContent = `OFFLINE · last update ${Math.round(age)}s ago`;
+    $('foot').textContent = `OFFLINE · refresh #${refreshCount} · last fetch ${Math.round(age)}s ago`;
     $('foot').style.color = 'var(--orange)';
   }
 }
+
+// Also refresh when user brings app back to foreground (iOS pauses background timers)
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) refresh();
+});
+window.addEventListener('focus', refresh);
 
 refresh();
 setInterval(refresh, REFRESH_MS);
