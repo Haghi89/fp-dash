@@ -142,6 +142,44 @@ body { padding: 8px 10px 20px; max-width: 600px; margin: 0 auto; }
 .section.active { display: block; }
 
 .foot { color: var(--muted); font-size: 10px; text-align: center; margin-top: 14px; }
+
+/* HEALTH STRIP — big prominent pipeline status */
+.health {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 14px; border-radius: 10px; margin-bottom: 10px;
+  font-size: 13px; font-weight: 600; letter-spacing: 0.5px;
+  border: 1px solid var(--border); background: var(--bg2);
+  font-variant-numeric: tabular-nums;
+}
+.health.ok      { background: rgba(0,230,118,0.10); border-color: var(--green);  color: var(--green); }
+.health.stale   { background: rgba(255,145,0,0.10); border-color: var(--orange); color: var(--orange); }
+.health.dead    { background: rgba(255,23,68,0.15); border-color: var(--red);    color: var(--red); animation: flash .8s infinite alternate; }
+.health-left  { display: flex; align-items: center; gap: 8px; }
+.health-right { font-size: 11px; opacity: 0.85; }
+.health-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  background: rgba(255,255,255,0.08); color: var(--text);
+}
+
+/* STALE OVERLAY — blocking modal when data >5min stale */
+#stale-overlay {
+  display: none; position: fixed; inset: 0; z-index: 1000;
+  background: rgba(10,12,16,0.95); backdrop-filter: blur(8px);
+  align-items: center; justify-content: center; padding: 20px;
+}
+#stale-overlay.show { display: flex; }
+.stale-box {
+  background: var(--bg2); border: 2px solid var(--red); border-radius: 16px;
+  padding: 24px; max-width: 360px; text-align: center;
+}
+.stale-box .icon { font-size: 48px; margin-bottom: 12px; }
+.stale-box h2 { color: var(--red); font-size: 18px; margin-bottom: 8px; letter-spacing: 1px; }
+.stale-box p  { color: var(--muted); font-size: 13px; line-height: 1.5; margin-bottom: 16px; }
+.stale-box button {
+  background: var(--cyan); color: #000; border: 0; border-radius: 10px;
+  padding: 12px 24px; font-weight: 700; font-size: 14px; cursor: pointer;
+}
 </style>
 </head>
 <body>
@@ -156,7 +194,24 @@ body { padding: 8px 10px 20px; max-width: 600px; margin: 0 auto; }
   ">↻ REFRESH</button>
 </div>
 
+<div class="health ok" id="health">
+  <div class="health-left">
+    <span id="health-status">CONNECTING</span>
+    <span class="health-pill" id="health-pill">init</span>
+  </div>
+  <div class="health-right" id="health-age">—</div>
+</div>
+
 <div id="alert"></div>
+
+<div id="stale-overlay">
+  <div class="stale-box">
+    <div class="icon">⚠️</div>
+    <h2>DATA FEED DOWN</h2>
+    <p id="stale-detail">No fresh data for &gt;5 minutes. The VPS pusher may be offline, or the network is blocked.</p>
+    <button onclick="document.getElementById('stale-overlay').classList.remove('show');manualRefresh()">RETRY NOW</button>
+  </div>
+</div>
 
 <div class="tabs">
   <div class="tab active" data-tab="ftmo" onclick="showTab('ftmo')">FTMO €10K</div>
@@ -254,9 +309,14 @@ body { padding: 8px 10px 20px; max-width: 600px; margin: 0 auto; }
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-// GitHub Pages CDN caches JSON for 10 min. We fetch from raw.githubusercontent.com instead,
-// which serves directly without CDN — real-time updates every 10s.
-const STATUS_URL = 'https://raw.githubusercontent.com/Haghi89/fp-dash/main/status.json';
+// Fetch chain: try raw (no CDN cache) first, fall back to Pages, fall back to localStorage cache.
+// raw.githubusercontent.com has Cache-Control: max-age=300 but we cache-bust with ?t= and
+// `cache: 'no-store'` to bypass. Pages has 10-min CDN; only used if raw is fully blocked.
+const STATUS_URLS = [
+  'https://raw.githubusercontent.com/Haghi89/fp-dash/main/status.json',
+  'https://haghi89.github.io/fp-dash/status.json',
+];
+const LAST_GOOD_KEY = 'fp_last_good_status';
 
 // App version detection: store the hash we see on first successful fetch,
 // then auto-reload if it changes (means VPS deployed a new index.html).
@@ -403,12 +463,86 @@ function renderChart(prefix, samples, key) {
 }
 
 let refreshCount = 0;
+let lastSourceUsed = null;
+
+async function fetchWithFallback() {
+  // Try each URL in order; cache-bust query + no-store header
+  let lastErr = null;
+  for (let i = 0; i < STATUS_URLS.length; i++) {
+    try {
+      const r = await fetch(STATUS_URLS[i] + '?t=' + Date.now(), {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      lastSourceUsed = i === 0 ? 'raw' : 'pages';
+      try { localStorage.setItem(LAST_GOOD_KEY, JSON.stringify(d)); } catch(e) {}
+      return d;
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  // All live URLs failed — fall back to last-good cache
+  try {
+    const cached = localStorage.getItem(LAST_GOOD_KEY);
+    if (cached) {
+      lastSourceUsed = 'cache';
+      return JSON.parse(cached);
+    }
+  } catch(e) {}
+  throw lastErr || new Error('all sources failed');
+}
+
+function renderHealth(d, fetchError) {
+  const el = $('health');
+  const statusEl = $('health-status');
+  const pillEl = $('health-pill');
+  const ageEl = $('health-age');
+  const overlay = $('stale-overlay');
+  const detail = $('stale-detail');
+
+  if (fetchError && !d) {
+    // No data at all
+    el.className = 'health dead';
+    statusEl.textContent = 'OFFLINE';
+    pillEl.textContent = 'no data';
+    ageEl.textContent = `last try: ${new Date().toLocaleTimeString('de-DE',{timeZone:'Europe/Berlin',hour12:false})}`;
+    return;
+  }
+
+  const ageSec = d.generated_utc ? Math.round((Date.now() - new Date(d.generated_utc).getTime()) / 1000) : 99999;
+  const ph = d.pusher_health || 'unknown';
+  const fails = d.consecutive_fails || 0;
+  const src = lastSourceUsed || '?';
+
+  // Color rule: green <30s + pusher ok ; orange 30-120s OR pusher degraded ; red >120s OR pusher recovering
+  let cls = 'ok', label = 'LIVE';
+  if (ageSec > 120 || ph === 'recovering' || src === 'cache') {
+    cls = 'dead'; label = src === 'cache' ? 'OFFLINE (CACHED)' : 'DEAD';
+  } else if (ageSec > 30 || ph === 'degraded' || fails > 0) {
+    cls = 'stale'; label = 'STALE';
+  }
+  el.className = 'health ' + cls;
+  statusEl.textContent = label;
+  pillEl.textContent = `${ph} · src:${src}` + (fails > 0 ? ` · fails:${fails}` : '');
+  ageEl.textContent = `${ageSec}s · #${refreshCount}`;
+
+  // Blocking overlay for >5min staleness
+  if (ageSec > 300 || src === 'cache') {
+    detail.textContent = src === 'cache'
+      ? `Showing cached data from ${new Date(d.generated_utc).toLocaleString('sv-SE',{timeZone:'Europe/Berlin',hour12:false})} Berlin. Live feed is unreachable.`
+      : `No fresh data for ${Math.floor(ageSec/60)}m ${ageSec%60}s. VPS pusher likely offline.`;
+    overlay.classList.add('show');
+  } else {
+    overlay.classList.remove('show');
+  }
+}
+
 async function refresh() {
   refreshCount++;
   try {
-    const r = await fetch(STATUS_URL + '?t=' + Date.now(), { cache: 'no-store' });
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
+    const d = await fetchWithFallback();
     lastFetch = Date.now();
     $('dot').className = 'dot';
     // Show timestamp in German local time (Europe/Berlin, auto-handles CET/CEST)
@@ -428,10 +562,11 @@ async function refresh() {
       renderChart('fp',   d.timeline, 'fp_target_pct');
     }
     renderAlert(d);
+    renderHealth(d, null);
     const dataAge = Math.round((Date.now() - new Date(d.generated_utc).getTime()) / 1000);
     const localFetched = new Date(lastFetch).toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour12: false });
     const vTag = d.app_version ? d.app_version.substring(0, 7) : '';
-    $('foot').textContent = `refresh #${refreshCount} · data ${dataAge}s old · fetched ${localFetched} · ${vTag}`;
+    $('foot').textContent = `refresh #${refreshCount} · data ${dataAge}s old · fetched ${localFetched} · src:${lastSourceUsed} · ${vTag}`;
     $('foot').style.color = dataAge > 30 ? 'var(--orange)' : 'var(--muted)';
 
     // Auto-reload when VPS deploys a new index.html (hash changes).
@@ -447,8 +582,9 @@ async function refresh() {
   } catch (e) {
     const age = lastFetch ? (Date.now() - lastFetch) / 1000 : 0;
     $('dot').className = age > 120 ? 'dot dead' : 'dot stale';
-    $('foot').textContent = `OFFLINE · refresh #${refreshCount} · last fetch ${Math.round(age)}s ago`;
+    $('foot').textContent = `OFFLINE · refresh #${refreshCount} · last fetch ${Math.round(age)}s ago · ${e.message}`;
     $('foot').style.color = 'var(--orange)';
+    renderHealth(null, e);
   }
 }
 

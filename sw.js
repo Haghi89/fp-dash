@@ -1,6 +1,6 @@
-// Service worker v3 — NETWORK-FIRST strategy so phone always gets fresh HTML.
-// Falls back to cache only when offline.
-const CACHE = 'fp-desk-v3';
+// Service worker v4 — NETWORK-FIRST for HTML/data, cache-first for icons.
+// v4 adds health-strip and fallback fetch URL — bump forces clean activation on iOS.
+const CACHE = 'fp-desk-v4';
 const BASE = '/fp-dash/';
 const STATIC = [BASE + 'icon-192.png', BASE + 'icon-512.png'];
 
