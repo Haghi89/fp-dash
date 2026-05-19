@@ -516,23 +516,35 @@ function renderHealth(d, fetchError) {
   const fails = d.consecutive_fails || 0;
   const src = lastSourceUsed || '?';
 
-  // Color rule: green <30s + pusher ok ; orange 30-120s OR pusher degraded ; red >120s OR pusher recovering
-  let cls = 'ok', label = 'LIVE';
-  if (ageSec > 120 || ph === 'recovering' || src === 'cache') {
-    cls = 'dead'; label = src === 'cache' ? 'OFFLINE (CACHED)' : 'DEAD';
-  } else if (ageSec > 30 || ph === 'degraded' || fails > 0) {
-    cls = 'stale'; label = 'STALE';
+  // GitHub CDN caches status.json for up to 300s ignoring query strings. So:
+  //   <180s (3 min): green — within normal CDN window
+  //   180-600s (3-10 min): orange — CDN behind but pusher might be fine
+  //   >600s (10 min) AND pusher_health != ok: red — likely real pipeline issue
+  // pusher_health is the VPS-side ground truth (NOT subject to CDN cache),
+  // so if it says "ok" we trust the pipeline is healthy even when our view is stale.
+  let cls, label;
+  if (ph === 'ok' && ageSec < 180) {
+    cls = 'ok'; label = 'LIVE';
+  } else if (src === 'cache') {
+    cls = 'dead'; label = 'NO CONNECTION';
+  } else if (ageSec > 600 || ph === 'recovering') {
+    cls = 'dead'; label = 'PIPELINE DOWN';
+  } else if (ageSec > 180 || ph === 'degraded' || fails > 0) {
+    cls = 'stale'; label = ph === 'ok' ? 'CDN DELAY' : 'DEGRADED';
+  } else {
+    cls = 'ok'; label = 'LIVE';
   }
   el.className = 'health ' + cls;
   statusEl.textContent = label;
-  pillEl.textContent = `${ph} · src:${src}` + (fails > 0 ? ` · fails:${fails}` : '');
-  ageEl.textContent = `${ageSec}s · #${refreshCount}`;
+  pillEl.textContent = `vps:${ph} · ${src}` + (fails > 0 ? ` · fails:${fails}` : '');
+  ageEl.textContent = ageSec < 60 ? `${ageSec}s` : `${Math.floor(ageSec/60)}m ${ageSec%60}s`;
+  ageEl.title = `refresh #${refreshCount}`;
 
-  // Blocking overlay for >5min staleness
-  if (ageSec > 300 || src === 'cache') {
+  // Blocking overlay ONLY when truly down: no connection AT ALL, OR pipeline clearly dead
+  if (src === 'cache' || (ageSec > 900 && ph !== 'ok')) {
     detail.textContent = src === 'cache'
-      ? `Showing cached data from ${new Date(d.generated_utc).toLocaleString('sv-SE',{timeZone:'Europe/Berlin',hour12:false})} Berlin. Live feed is unreachable.`
-      : `No fresh data for ${Math.floor(ageSec/60)}m ${ageSec%60}s. VPS pusher likely offline.`;
+      ? `Phone cannot reach GitHub. Showing cached data from ${new Date(d.generated_utc).toLocaleString('sv-SE',{timeZone:'Europe/Berlin',hour12:false})} Berlin.`
+      : `No fresh data for ${Math.floor(ageSec/60)} min. VPS pusher reports state: ${ph}.`;
     overlay.classList.add('show');
   } else {
     overlay.classList.remove('show');
