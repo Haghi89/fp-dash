@@ -149,6 +149,11 @@ body { padding: 8px 10px 20px; max-width: 600px; margin: 0 auto; }
 <div class="top">
   <h1><span id="dot" class="dot"></span>● FP DESK</h1>
   <div class="ts" id="ts">loading...</div>
+  <button id="reload" onclick="manualRefresh()" style="
+    background:var(--cyan);color:#000;border:0;border-radius:8px;
+    padding:8px 14px;font-weight:700;font-size:13px;cursor:pointer;
+    -webkit-tap-highlight-color:rgba(0,229,255,.3);min-width:80px;
+  ">↻ REFRESH</button>
 </div>
 
 <div id="alert"></div>
@@ -436,6 +441,16 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) refresh();
 });
 window.addEventListener('focus', refresh);
+
+async function manualRefresh() {
+  const btn = document.getElementById('reload');
+  const orig = btn.textContent;
+  btn.textContent = '...';
+  btn.disabled = true;
+  await refresh();
+  btn.textContent = '✓';
+  setTimeout(() => { btn.textContent = orig; btn.disabled = false; }, 800);
+}
 
 refresh();
 setInterval(refresh, REFRESH_MS);
