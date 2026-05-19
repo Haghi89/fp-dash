@@ -402,7 +402,15 @@ async function refresh() {
     const d = await r.json();
     lastFetch = Date.now();
     $('dot').className = 'dot';
-    $('ts').textContent = d.generated_utc ? d.generated_utc.substring(0, 19).replace('T', ' ') : '—';
+    // Show timestamp in German local time (Europe/Berlin, auto-handles CET/CEST)
+    if (d.generated_utc) {
+      const berlin = new Date(d.generated_utc).toLocaleString('sv-SE', {
+        timeZone: 'Europe/Berlin', hour12: false
+      });
+      $('ts').textContent = berlin + ' Berlin';
+    } else {
+      $('ts').textContent = '—';
+    }
     renderAccount('ftmo', d.ftmo, d.ftmo_kpi, '€', d.stress_3pct && d.stress_3pct.ftmo);
     renderAccount('fp',   d.fp,   d.fp_kpi,   '$', d.stress_3pct && d.stress_3pct.fp);
     renderPCB(d.pcb);
@@ -412,7 +420,8 @@ async function refresh() {
     }
     renderAlert(d);
     const dataAge = Math.round((Date.now() - new Date(d.generated_utc).getTime()) / 1000);
-    $('foot').textContent = `refresh #${refreshCount} · data ${dataAge}s old · fetched ${new Date(lastFetch).toLocaleTimeString()}`;
+    const localFetched = new Date(lastFetch).toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour12: false });
+    $('foot').textContent = `refresh #${refreshCount} · data ${dataAge}s old · fetched ${localFetched}`;
     $('foot').style.color = dataAge > 30 ? 'var(--orange)' : 'var(--muted)';
   } catch (e) {
     const age = lastFetch ? (Date.now() - lastFetch) / 1000 : 0;
