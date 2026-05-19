@@ -257,6 +257,10 @@ body { padding: 8px 10px 20px; max-width: 600px; margin: 0 auto; }
 // GitHub Pages CDN caches JSON for 10 min. We fetch from raw.githubusercontent.com instead,
 // which serves directly without CDN — real-time updates every 10s.
 const STATUS_URL = 'https://raw.githubusercontent.com/Haghi89/fp-dash/main/status.json';
+
+// App version detection: store the hash we see on first successful fetch,
+// then auto-reload if it changes (means VPS deployed a new index.html).
+let initialAppVersion = null;
 const REFRESH_MS = 10000;
 
 let activeTab = 'ftmo';
@@ -426,8 +430,20 @@ async function refresh() {
     renderAlert(d);
     const dataAge = Math.round((Date.now() - new Date(d.generated_utc).getTime()) / 1000);
     const localFetched = new Date(lastFetch).toLocaleTimeString('de-DE', { timeZone: 'Europe/Berlin', hour12: false });
-    $('foot').textContent = `refresh #${refreshCount} · data ${dataAge}s old · fetched ${localFetched}`;
+    const vTag = d.app_version ? d.app_version.substring(0, 7) : '';
+    $('foot').textContent = `refresh #${refreshCount} · data ${dataAge}s old · fetched ${localFetched} · ${vTag}`;
     $('foot').style.color = dataAge > 30 ? 'var(--orange)' : 'var(--muted)';
+
+    // Auto-reload when VPS deploys a new index.html (hash changes).
+    if (d.app_version) {
+      if (initialAppVersion === null) {
+        initialAppVersion = d.app_version;
+      } else if (d.app_version !== initialAppVersion) {
+        console.log(`new version: ${d.app_version} (was ${initialAppVersion}) - reloading`);
+        $('foot').textContent = 'updating to new version...';
+        setTimeout(() => location.reload(true), 1500);
+      }
+    }
   } catch (e) {
     const age = lastFetch ? (Date.now() - lastFetch) / 1000 : 0;
     $('dot').className = age > 120 ? 'dot dead' : 'dot stale';
