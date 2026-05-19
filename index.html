@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FP Desk">
+<meta name="theme-color" content="#0a0c10">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>FP Trading Desk</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+:root {
+  --bg: #0a0c10; --bg2: #111318; --bg3: #181c22; --bg4: #1e2330;
+  --text: #d0d8e8; --muted: #5a6478; --border: #252a35;
+  --green: #00e676; --red: #ff1744; --orange: #ff9100;
+  --blue: #2979ff; --cyan: #00e5ff; --purple: #aa00ff;
+}
+html, body {
+  background: var(--bg); color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px; line-height: 1.4; min-height: 100vh;
+  padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+}
+body { padding: 8px 10px 20px; max-width: 600px; margin: 0 auto; }
+
+/* TOP BAR */
+.top {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; background: var(--bg2); border-radius: 12px;
+  margin-bottom: 10px; border: 1px solid var(--border);
+}
+.top h1 { font-size: 12px; letter-spacing: 2px; color: var(--cyan); text-transform: uppercase; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+       display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
+.dot.stale { background: var(--orange); animation: none; }
+.dot.dead { background: var(--red); animation: none; }
+@keyframes pulse { 0%,100% {opacity:1} 50% {opacity:.3} }
+.ts { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+/* ALERT BANNER */
+#alert {
+  display: none; padding: 10px 14px; border-radius: 10px; margin-bottom: 10px;
+  font-weight: 700; font-size: 13px; text-align: center;
+}
+#alert.warn { background: var(--orange); color: #000; display: block; }
+#alert.bust { background: var(--red); color: #fff; display: block; animation: flash .5s infinite alternate; }
+#alert.win  { background: var(--green); color: #000; display: block; }
+@keyframes flash { from {opacity:1} to {opacity:.5} }
+
+/* TABS */
+.tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+.tab {
+  flex: 1; padding: 10px; text-align: center; cursor: pointer;
+  font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--muted); background: var(--bg2); border-radius: 10px;
+  border: 1px solid var(--border); transition: all .2s;
+}
+.tab.active { color: var(--cyan); border-color: var(--cyan); background: var(--bg3); }
+
+/* GOAL BAR (big) */
+.goal-card {
+  background: linear-gradient(135deg, var(--bg2), var(--bg3));
+  border: 1px solid var(--border); border-radius: 14px;
+  padding: 16px; margin-bottom: 10px;
+}
+.goal-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; }
+.goal-row { display: flex; justify-content: space-between; align-items: baseline; margin-top: 6px; }
+.goal-pct { font-size: 32px; font-weight: 900; letter-spacing: -1px; }
+.goal-eq { font-size: 13px; color: var(--muted); }
+.goal-track {
+  background: var(--bg); border-radius: 8px; height: 12px;
+  margin-top: 10px; overflow: hidden; position: relative;
+}
+.goal-fill {
+  height: 12px; border-radius: 8px;
+  background: linear-gradient(90deg, var(--blue), var(--cyan));
+  transition: width .8s;
+}
+.goal-rem { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+/* TWO COL CARDS */
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px; position: relative;
+}
+.card-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; }
+.card-val { font-size: 22px; font-weight: 800; margin-top: 4px; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.card-sub { font-size: 10px; color: var(--muted); margin-top: 3px; }
+.bar-track { background: var(--bg); height: 5px; border-radius: 5px; margin-top: 8px; overflow: hidden; }
+.bar-fill { height: 5px; transition: width .6s, background .6s; }
+
+/* STRESS LINE */
+.stress {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 14px; margin-bottom: 10px; font-size: 12px;
+}
+.stress b { color: var(--orange); font-variant-numeric: tabular-nums; }
+
+/* CHART CARD */
+.chart-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px; margin-bottom: 10px;
+}
+.chart-card h3 { font-size: 10px; color: var(--muted); letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 8px; }
+
+/* POSITIONS */
+.pos-card {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px; margin-bottom: 8px;
+}
+.pos-head { display: flex; justify-content: space-between; align-items: center; }
+.pos-sym { font-size: 14px; font-weight: 700; }
+.pos-side { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 9px; font-weight: 700; }
+.pos-side.BUY { background: rgba(0,230,118,.2); color: var(--green); }
+.pos-side.SELL { background: rgba(255,23,68,.2); color: var(--red); }
+.pos-lot { color: var(--muted); font-size: 11px; }
+.pos-pnl { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pos-pnl.pos { color: var(--green); } .pos-pnl.neg { color: var(--red); }
+.pos-days { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.pos-days-label { font-size: 10px; color: var(--muted); }
+.pos-days-bar { background: var(--bg); height: 4px; flex: 1; margin: 0 8px; border-radius: 4px; overflow: hidden; }
+.pos-days-fill { height: 4px; background: var(--blue); transition: width .6s; }
+.pos-days.urgent .pos-days-fill { background: var(--orange); }
+.pos-days.imminent .pos-days-fill { background: var(--red); }
+
+/* PCB CARD */
+.pcb-card {
+  background: linear-gradient(135deg, var(--bg2), #1a0f24);
+  border: 1px solid var(--purple); border-radius: 12px;
+  padding: 14px; margin-bottom: 10px;
+}
+.pcb-row { display: flex; justify-content: space-between; padding: 4px 0; font-size: 12px; }
+.pcb-row .lbl { color: var(--muted); }
+.pcb-row .val { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* SECTION */
+.section { display: none; }
+.section.active { display: block; }
+
+.foot { color: var(--muted); font-size: 10px; text-align: center; margin-top: 14px; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <h1><span id="dot" class="dot"></span>● FP DESK</h1>
+  <div class="ts" id="ts">loading...</div>
+</div>
+
+<div id="alert"></div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="ftmo" onclick="showTab('ftmo')">FTMO €10K</div>
+  <div class="tab" data-tab="fp" onclick="showTab('fp')">FP $5K</div>
+</div>
+
+<!-- ============== FTMO SECTION ============== -->
+<div id="sec-ftmo" class="section active">
+
+  <div class="goal-card">
+    <div class="goal-label">PROGRESS TO +8% TARGET</div>
+    <div class="goal-row">
+      <div class="goal-pct" id="ftmo-pct">—</div>
+      <div class="goal-eq" id="ftmo-eq">—</div>
+    </div>
+    <div class="goal-track"><div class="goal-fill" id="ftmo-bar" style="width:0%"></div></div>
+    <div class="goal-rem" id="ftmo-rem">—</div>
+  </div>
+
+  <div class="row2">
+    <div class="card">
+      <div class="card-label">Daily Buffer</div>
+      <div class="card-val" id="ftmo-daily">—</div>
+      <div class="card-sub" id="ftmo-daily-sub">—</div>
+      <div class="bar-track"><div class="bar-fill" id="ftmo-daily-bar" style="width:0%"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Buffer</div>
+      <div class="card-val" id="ftmo-total">—</div>
+      <div class="card-sub" id="ftmo-total-sub">—</div>
+      <div class="bar-track"><div class="bar-fill" id="ftmo-total-bar" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="stress">⚡ Worst case if all positions -3%: <b id="ftmo-stress">—</b></div>
+
+  <div class="chart-card">
+    <h3>Equity · last 60 min</h3>
+    <canvas id="ftmo-chart" style="max-height:140px"></canvas>
+  </div>
+
+  <div id="ftmo-positions"></div>
+
+</div>
+
+<!-- ============== FP SECTION ============== -->
+<div id="sec-fp" class="section">
+
+  <div class="goal-card">
+    <div class="goal-label">PROGRESS TO +8% TARGET</div>
+    <div class="goal-row">
+      <div class="goal-pct" id="fp-pct">—</div>
+      <div class="goal-eq" id="fp-eq">—</div>
+    </div>
+    <div class="goal-track"><div class="goal-fill" id="fp-bar" style="width:0%;background:linear-gradient(90deg,var(--purple),var(--cyan))"></div></div>
+    <div class="goal-rem" id="fp-rem">—</div>
+  </div>
+
+  <div class="row2">
+    <div class="card">
+      <div class="card-label">Daily Buffer</div>
+      <div class="card-val" id="fp-daily">—</div>
+      <div class="card-sub" id="fp-daily-sub">—</div>
+      <div class="bar-track"><div class="bar-fill" id="fp-daily-bar" style="width:0%"></div></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total Buffer</div>
+      <div class="card-val" id="fp-total">—</div>
+      <div class="card-sub" id="fp-total-sub">—</div>
+      <div class="bar-track"><div class="bar-fill" id="fp-total-bar" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="stress">⚡ Worst case if all positions -3%: <b id="fp-stress">—</b></div>
+
+  <div class="chart-card">
+    <h3>Equity · last 60 min</h3>
+    <canvas id="fp-chart" style="max-height:140px"></canvas>
+  </div>
+
+  <div id="fp-positions"></div>
+
+</div>
+
+<!-- ============== PCB (always visible) ============== -->
+<div class="pcb-card">
+  <div style="font-size:11px;color:var(--purple);font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">⛔ Circuit Breaker</div>
+  <div class="pcb-row"><span class="lbl">Combined baseline</span><span class="val" id="pcb-base">—</span></div>
+  <div class="pcb-row"><span class="lbl">Trip @ -4%</span><span class="val" id="pcb-trip">—</span></div>
+  <div class="pcb-row"><span class="lbl">Polls</span><span class="val" id="pcb-polls">—</span></div>
+  <div class="pcb-row"><span class="lbl">Max DD seen</span><span class="val" id="pcb-maxdd">—</span></div>
+</div>
+
+<div class="foot" id="foot">refreshing every 10s</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// Same-origin fetch: status.json sits next to this HTML in the public repo,
+// served via GitHub Pages. No tunnel needed, no CORS issues, no auth needed.
+const STATUS_URL = 'status.json';
+const REFRESH_MS = 10000;
+
+let activeTab = 'ftmo';
+let lastFetch = 0;
+let ftmoChart, fpChart;
+
+function $(id) { return document.getElementById(id); }
+function fmt(v, d) { if (typeof v !== 'number') return '—'; return (v>=0?'+':'')+v.toFixed(d||2); }
+function fmtMoney(v, ccy) { if (typeof v !== 'number') return '—'; return ccy+v.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0}); }
+function col(v) { return v >= 0 ? 'var(--green)' : 'var(--red)'; }
+function gaugeCol(p) { if (p < 50) return 'var(--green)'; if (p < 80) return 'var(--orange)'; return 'var(--red)'; }
+
+function showTab(t) {
+  activeTab = t;
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === t));
+  document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+  $('sec-'+t).classList.add('active');
+}
+
+function renderAlert(d) {
+  const el = $('alert');
+  el.className = '';
+  const ftmoV = d.ftmo_kpi && d.ftmo_kpi.verdict;
+  const fpV = d.fp_kpi && d.fp_kpi.verdict;
+  const v = activeTab === 'ftmo' ? ftmoV : fpV;
+  const acc = activeTab === 'ftmo' ? 'FTMO' : 'FP';
+  if (v === 'BUSTED_DAILY' || v === 'BUSTED_TOTAL') {
+    el.className = 'bust'; el.textContent = `🚨 ${acc} ${v.replace('_',' ')}`; return;
+  }
+  if (v === 'TARGET_HIT') {
+    el.className = 'win'; el.textContent = `🎯 ${acc} TARGET HIT — CLAIM P1`; return;
+  }
+  if (v === 'WARN_DAILY' || v === 'WARN_TOTAL') {
+    el.className = 'warn'; el.textContent = `⚠ ${acc} ${v.replace('_',' ').toLowerCase()}`; return;
+  }
+}
+
+function renderAccount(prefix, acc, kpi, ccy, stress, posCfg) {
+  if (!kpi || kpi.verdict === 'ERROR' || acc.error) {
+    $(prefix+'-pct').textContent = '—';
+    $(prefix+'-eq').textContent = acc.error || 'no data';
+    return;
+  }
+  const tp = kpi.target_pct;
+  $(prefix+'-pct').textContent = fmt(tp, 2) + '%';
+  $(prefix+'-pct').style.color = col(tp);
+  $(prefix+'-eq').textContent = fmtMoney(acc.equity, ccy) + ' / ' + fmtMoney(kpi.target, ccy);
+  const goalProgress = Math.max(0, Math.min(100, (tp/8)*100));
+  $(prefix+'-bar').style.width = goalProgress + '%';
+  $(prefix+'-rem').textContent = (kpi.to_target >= 0 ? 'to go: ' : 'beyond: ') + fmtMoney(Math.abs(kpi.to_target), ccy);
+
+  // Daily buffer
+  $(prefix+'-daily').textContent = fmtMoney(kpi.daily_buffer, ccy);
+  $(prefix+'-daily-sub').textContent = 'used: ' + kpi.daily_used_pct.toFixed(2) + '%';
+  const dailyUsedClamp = Math.min(100, kpi.daily_used_pct / 5 * 100);  // 5% = full bar
+  $(prefix+'-daily-bar').style.cssText = `width:${dailyUsedClamp}%;background:${gaugeCol(dailyUsedClamp)}`;
+  $(prefix+'-daily').style.color = kpi.daily_used_pct >= 4 ? 'var(--red)' : kpi.daily_used_pct >= 3 ? 'var(--orange)' : 'var(--text)';
+
+  // Total buffer
+  $(prefix+'-total').textContent = fmtMoney(kpi.total_buffer, ccy);
+  $(prefix+'-total-sub').textContent = 'used: ' + kpi.total_used_pct.toFixed(2) + '%';
+  const totalUsedClamp = Math.min(100, kpi.total_used_pct / 10 * 100);
+  $(prefix+'-total-bar').style.cssText = `width:${totalUsedClamp}%;background:${gaugeCol(totalUsedClamp)}`;
+  $(prefix+'-total').style.color = kpi.total_used_pct >= 8 ? 'var(--red)' : kpi.total_used_pct >= 6 ? 'var(--orange)' : 'var(--text)';
+
+  // Stress
+  $(prefix+'-stress').textContent = fmtMoney(stress || 0, ccy);
+
+  // Positions
+  const container = $(prefix+'-positions');
+  if (!acc.positions || acc.positions.length === 0) {
+    container.innerHTML = '<div class="pos-card" style="text-align:center;color:var(--muted)">no open positions</div>';
+  } else {
+    container.innerHTML = acc.positions.map(p => {
+      const days = p.days_remaining;
+      let urgency = '';
+      if (days >= 0 && days <= 1) urgency = 'imminent';
+      else if (days >= 0 && days <= 3) urgency = 'urgent';
+      const holdN = (p.hold_rule || '').split('_')[1] || 30;
+      const progress = days >= 0 ? Math.min(100, ((holdN - days) / holdN) * 100) : 100;
+      const pnlClass = p.profit >= 0 ? 'pos' : 'neg';
+      return `<div class="pos-card">
+        <div class="pos-head">
+          <div>
+            <span class="pos-sym">${p.symbol}</span>
+            <span class="pos-side ${p.side}">${p.side}</span>
+            <span class="pos-lot"> · ${p.lot} lot</span>
+          </div>
+          <div class="pos-pnl ${pnlClass}">${fmt(p.profit)} ${ccy}</div>
+        </div>
+        <div class="pos-days ${urgency}">
+          <span class="pos-days-label">${days >= 0 ? days + 'd left' : 'no exit set'}</span>
+          <div class="pos-days-bar"><div class="pos-days-fill" style="width:${progress}%"></div></div>
+          <span class="pos-days-label">${p.hold_rule || ''}</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function renderPCB(pcb) {
+  if (!pcb) return;
+  $('pcb-base').textContent = '$' + (pcb.baseline_combined_usd || 0).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0});
+  const tripFloor = (pcb.baseline_combined_usd || 0) * (1 - (pcb.trip_pct || 0.04));
+  $('pcb-trip').textContent = '$' + tripFloor.toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0});
+  $('pcb-polls').textContent = pcb.polls || 0;
+  const maxdd = (pcb.max_dd_seen_pct || 0) * 100;
+  $('pcb-maxdd').textContent = fmt(maxdd, 3) + '%';
+  $('pcb-maxdd').style.color = col(maxdd);
+}
+
+function renderChart(prefix, samples, key) {
+  if (!samples || samples.length === 0) return;
+  const canvas = $(prefix+'-chart');
+  if (!canvas) return;
+  const labels = samples.map(s => s.t.substring(11, 16));
+  const data = samples.map(s => s[key]);
+
+  const existing = prefix === 'ftmo' ? ftmoChart : fpChart;
+  if (existing) {
+    existing.data.labels = labels;
+    existing.data.datasets[0].data = data;
+    existing.update('none');
+    return;
+  }
+  const ctx = canvas.getContext('2d');
+  const chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [{ data, borderColor: '#00e5ff', backgroundColor: 'rgba(0,229,255,0.06)', borderWidth: 2, fill: true, tension: 0.3, pointRadius: 0 }]},
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: {
+        x: { ticks: { color: '#5a6478', font: {size:9}, maxTicksLimit: 6 }, grid: { color: '#1e2330' } },
+        y: { ticks: { color: '#5a6478', font: {size:9}, callback: v => v.toFixed(1)+'%' }, grid: { color: '#1e2330' } }
+      }
+    }
+  });
+  if (prefix === 'ftmo') ftmoChart = chart; else fpChart = chart;
+}
+
+async function refresh() {
+  try {
+    const r = await fetch(STATUS_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    lastFetch = Date.now();
+    $('dot').className = 'dot';
+    $('ts').textContent = d.generated_utc ? d.generated_utc.substring(0, 19).replace('T', ' ') : '—';
+    renderAccount('ftmo', d.ftmo, d.ftmo_kpi, '€', d.stress_3pct && d.stress_3pct.ftmo);
+    renderAccount('fp',   d.fp,   d.fp_kpi,   '$', d.stress_3pct && d.stress_3pct.fp);
+    renderPCB(d.pcb);
+    if (d.timeline) {
+      renderChart('ftmo', d.timeline, 'ftmo_target_pct');
+      renderChart('fp',   d.timeline, 'fp_target_pct');
+    }
+    renderAlert(d);
+    $('foot').textContent = 'updated ' + new Date(lastFetch).toLocaleTimeString();
+  } catch (e) {
+    const age = (Date.now() - lastFetch) / 1000;
+    $('dot').className = age > 120 ? 'dot dead' : 'dot stale';
+    $('foot').textContent = `OFFLINE · last update ${Math.round(age)}s ago`;
+    $('foot').style.color = 'var(--orange)';
+  }
+}
+
+refresh();
+setInterval(refresh, REFRESH_MS);
+
+// Register service worker for offline + Add to Home Screen support
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(()=>{});
+}
+</script>
+</body>
+</html>
