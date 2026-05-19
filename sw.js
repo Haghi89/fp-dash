@@ -1,9 +1,10 @@
-// Service worker — caches static assets, lets /status.json always hit network
-const CACHE = 'fp-desk-v1';
-const STATIC = ['/', '/index.html', '/manifest.json', '/icon-192.png', '/icon-512.png'];
+// Service worker for fp-dash PWA — served at /fp-dash/ on GitHub Pages
+const CACHE = 'fp-desk-v2';
+const BASE = '/fp-dash/';
+const STATIC = [BASE, BASE + 'index.html', BASE + 'manifest.json', BASE + 'icon-192.png', BASE + 'icon-512.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC.filter(u => u))));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));
   self.skipWaiting();
 });
 
@@ -15,12 +16,12 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // Always hit network for live data
-  if (url.pathname === '/status.json' || url.pathname.startsWith('/api/')) {
+  // status.json: always network, fall back to cache
+  if (url.pathname.endsWith('/status.json')) {
     e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
     return;
   }
-  // Static assets — cache first
+  // Everything else: cache-first
   e.respondWith(
     caches.match(e.request).then(r => r || fetch(e.request).then(resp => {
       const copy = resp.clone();

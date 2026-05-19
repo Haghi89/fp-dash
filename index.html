@@ -421,9 +421,9 @@ async function refresh() {
 refresh();
 setInterval(refresh, REFRESH_MS);
 
-// Register service worker for offline + Add to Home Screen support
+// Register service worker (use relative path so it works at /fp-dash/ AND local preview)
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(()=>{});
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
 }
 </script>
 </body>
